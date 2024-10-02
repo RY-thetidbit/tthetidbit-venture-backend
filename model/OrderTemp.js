@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const orderSchema = new mongoose.Schema(
+const orderTempSchema = new mongoose.Schema(
   {
     user: {
       type: mongoose.Schema.Types.ObjectId,
@@ -95,21 +95,21 @@ const orderSchema = new mongoose.Schema(
 );
 
 // define pre-save middleware to generate the invoice number
-orderSchema.pre('save', async function (next) {
-  const order = this;
-  if (!order.invoice) { // check if the order already has an invoice number
+orderTempSchema.pre('save', async function (next) {
+  const OrderTemp = this;
+  if (!OrderTemp.invoice) { // check if the OrderTemp already has an invoice number
     try {
       // find the highest invoice number in the orders collection
       const highestInvoice = await mongoose
-        .model('Order')
+        .model('OrderTemp')
         .find({})
         .sort({ invoice: 'desc' })
         .limit(1)
         .select({ invoice: 1 });
       // if there are no orders in the collection, start at 1000
       const startingInvoice = highestInvoice.length === 0 ? 1000 : highestInvoice[0].invoice + 1;
-      // set the invoice number for the new order
-      order.invoice = startingInvoice;
+      // set the invoice number for the new OrderTemp
+      OrderTemp.invoice = startingInvoice;
       next();
     } catch (error) {
       next(error);
@@ -119,5 +119,5 @@ orderSchema.pre('save', async function (next) {
   }
 });
 
-const Order = mongoose.models.Order || mongoose.model("Order", orderSchema);
-module.exports = Order;
+const OrderTemp = mongoose.models.OrderTemp || mongoose.model("OrderTemp", orderTempSchema);
+module.exports = OrderTemp;
