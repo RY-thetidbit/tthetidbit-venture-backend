@@ -29,7 +29,8 @@ const allowedOrigins = [
   "https://thetidbit.in",
   "https://thetidbit-venture-frontend.vercel.app",
   "thetidbit.in",
-  "www.thetidbit.in"
+  "www.thetidbit.in",
+  "https://www.thetidbit.in/"
 ];
 
 // Enable CORS middleware
