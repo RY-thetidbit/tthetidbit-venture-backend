@@ -2,6 +2,7 @@ const { secret } = require("../config/secret");
 const stripe = require("stripe")(secret.stripe_key);
 const Order = require("../model/Order");
 const OrderTemp = require("../model/OrderTemp");
+const Payment = require("../model/Payment");
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 const crypto = require("crypto");
@@ -95,124 +96,151 @@ exports.updateOrderStatus = async (req, res) => {
 
 exports.paymentIntentPhonePay = async (req, res, next) => {
 
-  const transactionid = "MT7850590068188104";
+  const transactionid = `TXN_${Date.now()}`;
   const amount = Number(req?.body?.totalAmount);
   const totalAmount = amount * 100;
-  const contact =req?.body?.contact;
+  const contact = req?.body?.contact;
 
 
   let reqBody = req.body;
-  reqBody.paymentIntent = {merchantTransactionId: transactionid}
+  reqBody.paymentIntent = { merchantTransactionId: transactionid }
   const orderTempItems = await OrderTemp.create(req.body);
   // Payload definition
-const payload = {
-merchantId: process.env.NEXT_PUBLIC_MERCHANT_ID,
-  merchantTransactionId: transactionid,
-  merchantUserId: "MUID123",
-  amount: totalAmount,
-  redirectUrl: `http://localhost:7000/api/order/status/${transactionid}`,
-  redirectMode: "POST",
-  mobileNumber: contact,
-  order:req?.body,
-  paymentInstrument: {
-    type: "PAY_PAGE",
-  },
-};
+  const payload = {
+    merchantTransactionId: transactionid,
+    merchantId: process.env.NEXT_PUBLIC_MERCHANT_ID,
+    merchantUserId: process.env.NEXT_PUBLIC_MERCHANT_USER_ID,
+    redirectUrl: `${process.env.API_URL}/api/order/status/${transactionid}`,
+    redirectMode: "POST",
+    amount: totalAmount,
+    mobileNumber: contact,
+    order: req?.body,
+    paymentInstrument: {
+      type: "PAY_PAGE",
+    }
+  };
 
-// Convert payload to a JSON string
-const dataPayload = JSON.stringify(payload);
+  console.log("Payload:", payload);
 
-// Encode the payload into Base64
-const dataBase64 = Buffer.from(dataPayload).toString("base64");
-console.log(dataBase64);
+  // Convert payload to a JSON string
+  const dataPayload = JSON.stringify(payload);
 
-// Generate SHA256 checksum
-const sha256 = (data) => {
-  return crypto.createHash("sha256").update(data).digest("hex");
-};
+  // Encode the payload into Base64
+  const dataBase64 = Buffer.from(dataPayload).toString("base64");
+  console.log(dataBase64);
 
-// Create the full URL string
-const fullURL = dataBase64 + "/pg/v1/pay" + process.env.NEXT_PUBLIC_SALT_KEY;
+  // Generate SHA256 checksum
+  const sha256 = (data) => {
+    return crypto.createHash("sha256").update(data).digest("hex");
+  };
 
-// Generate the SHA256 hash of the full URL
-const dataSha256 = sha256(fullURL);
+  // Create the full URL string
+  const fullURL = dataBase64 + "/pg/v1/pay" + process.env.NEXT_PUBLIC_SALT_KEY;
 
-// Combine the hash with the checksum version (1)
-const checksum = dataSha256 + "###" + process.env.NEXT_PUBLIC_SALT_INDEX;
-console.log("c====", checksum);
+  // Generate the SHA256 hash of the full URL
+  const dataSha256 = sha256(fullURL);
 
-// PhonePe API URL for sandbox environment
-const UAT_PAY_API_URL = process.env.NEXT_PUBLIC_UAT_PAY_API_URL;
-const response = await axios.post(
-  UAT_PAY_API_URL,
-  {
-    request: dataBase64,
-  },
-  {
-    headers: {
-      accept: "application/json",
-      "Content-Type": "application/json",
-      "X-VERIFY": checksum,
+  // Combine the hash with the checksum version (1)
+  const checksum = dataSha256 + "###" + process.env.NEXT_PUBLIC_SALT_INDEX;
+  console.log("c====", checksum);
+
+  // PhonePe API URL for sandbox environment
+  const UAT_PAY_API_URL = process.env.NEXT_PUBLIC_UAT_PAY_API_URL;
+  const response = await axios.post(
+    UAT_PAY_API_URL,
+    {
+      request: dataBase64,
     },
-  }
-);
-res.send({response:response.data})
+    {
+      headers: {
+        accept: "application/json",
+        "Content-Type": "application/json",
+        "X-VERIFY": checksum,
+      },
+    }
+  );
+  res.send({ response: response.data })
 
 };
 
 const sha256 = (data) => {
   return crypto.createHash("sha256").update(data).digest("hex");
+};
+
+const saveTransaction = async ({
+  transactionId,
+  amount,
+  status,
+}) => {
+  await Payment.create({
+    transactionId,
+    amount,
+    status,
+  });
 };
 
 exports.paymentStatusPhonePay = async (req, res, next) => {
-try{
-// Directly access data from req.body
-const status = req.body.code;
-const merchantId = req.body.merchantId;
-const transactionId = req.body.transactionId;
+  try {
+    // Directly access data from req.body
+    const status = req.body.code;
+    const merchantId = req.body.merchantId;
+    const transactionId = req.body.transactionId;
 
-const st = `/pg/v1/status/${merchantId}/${transactionId}` + process.env.NEXT_PUBLIC_SALT_KEY;
-const dataSha256 = sha256(st);
+    const st = `/pg/v1/status/${merchantId}/${transactionId}` + process.env.NEXT_PUBLIC_SALT_KEY;
+    const dataSha256 = sha256(st);
 
-const checksum = dataSha256 + "###" + process.env.NEXT_PUBLIC_SALT_INDEX;
-console.log(checksum);
+    const checksum = dataSha256 + "###" + process.env.NEXT_PUBLIC_SALT_INDEX;
+    console.log(checksum);
 
-const options = {
-  method: "GET",
-  url: `https://api-preprod.phonepe.com/apis/pg-sandbox/pg/v1/status/${merchantId}/${transactionId}`,
-  headers: {
-    accept: "application/json",
-    "Content-Type": "application/json",
-    "X-VERIFY": checksum,
-    "X-MERCHANT-ID": `${merchantId}`,
-  },
-};
+    const options = {
+      method: "GET",
+      url: `${process.env.NEXT_PUBLIC_STATUS_API_URL}${merchantId}/${transactionId}`,
+      headers: {
+        accept: "application/json",
+        "Content-Type": "application/json",
+        "X-VERIFY": checksum,
+        "X-MERCHANT-ID": `${merchantId}`,
+      },
+    };
 
-// Check payment status
-const response = await axios.request(options);
-console.log("Response code:", response.data.code);
+    // Check payment status
+    const response = await axios.request(options);
+    const responseData = response.data;
+    console.log("Response data:", responseData);
+    console.log("Response code:", response.data.code);
 
-if (response.data.code === "PAYMENT_SUCCESS") {
-  const orderItemTemp = await OrderTemp.findOne({ "paymentIntent.merchantTransactionId": transactionId }).populate('user');
+    // SET THE PAYMENT STATUS
+    const paymentReq = {
+      transactionId: transactionId,
+      amount: Number(responseData?.data.amount) || 0,
+      status: response.data.code === "PAYMENT_SUCCESS" ? "Success" : "Failed",
+    }
+    saveTransaction(paymentReq);
 
-  if (orderItemTemp) {
-    let { _id, ...orderData } = orderItemTemp._doc;
-    orderData.paymentStatus = "success";
+    // Check if the payment was successful
 
-    const newOrder = await Order.create(orderData);
+    if (response.data.code === "PAYMENT_SUCCESS") {
+      const orderItemTemp = await OrderTemp.findOne({ "paymentIntent.merchantTransactionId": transactionId }).populate('user');
 
-    // Use JavaScript-based redirection instead of server-side 301
-    return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/${newOrder._id}";</script>`);
-  } else {
-    console.log("Temp order not found for transactionId:", transactionId);
-    return res.send(`<script>window.location.href="${process.env.STORE_URL}/  /failed";</script>`);
+      if (orderItemTemp) {
+        let { _id, ...orderData } = orderItemTemp._doc;
+        orderData.paymentStatus = "success";
+
+        const newOrder = await Order.create(orderData);
+
+        // Use JavaScript-based redirection instead of server-side 301
+        return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/${newOrder._id}";</script>`);
+      } else {
+        console.log("Temp order not found for transactionId:", transactionId);
+        return res.send(`<script>window.location.href="${process.env.STORE_URL}/  /failed";</script>`);
+      }
+    } else {
+      return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/failed";</script>`);
+    }
+  } catch (e) {
+    console.log("Error:", e);
+    return res.redirect(301, `${process.env.STORE_URL}/order/12345`);
   }
-} else {
-  return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/failed";</script>`);
-}
-}catch(e){
-  return res.redirect(301, `${process.env.STORE_URL}/order/12345`);
-}
-  
+
 };
 
