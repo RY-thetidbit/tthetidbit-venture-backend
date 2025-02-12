@@ -110,9 +110,9 @@ merchantId: process.env.NEXT_PUBLIC_MERCHANT_ID,
   merchantTransactionId: transactionid,
   merchantUserId: "MUID123",
   amount: totalAmount,
-  redirectUrl: `${process.env.STORE_URL}/order/success`,
+  redirectUrl: `${process.env.NEXT_PUBLIC_REDIRECT_URL}`,
   redirectMode: "POST",
-  callbackUrl: `${process.env.NEXT_PUBLIC_REDIRECTURL}${transactionid}`,
+  callbackUrl: `${process.env.NEXT_PUBLIC_CALLBACK_URL}${transactionid}`,
   mobileNumber: contact,
   order:req?.body,
   paymentInstrument: {
@@ -206,7 +206,7 @@ if (response.data.code === "PAYMENT_SUCCESS") {
     return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/${newOrder._id}";</script>`);
   } else {
     console.log("Temp order not found for transactionId:", transactionId);
-    return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/failed";</script>`);
+    return res.send(`<script>window.location.href="${process.env.STORE_URL}/  /failed";</script>`);
   }
 } else {
   return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/failed";</script>`);
