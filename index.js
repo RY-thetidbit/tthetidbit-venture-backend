@@ -23,7 +23,28 @@ const adminRoutes = require("./routes/admin.routes");
 const cloudinaryRoutes = require("./routes/cloudinary.routes");
 
 // middleware
-app.use(cors());
+// Define allowed frontend domains
+const allowedOrigins = [
+  "https://www.thetidbit.in",
+  "https://thetidbit.in",
+  "https://thetidbit-venture-frontend.vercel.app",
+  "thetidbit.in",
+  "www.thetidbit.in"
+];
+
+// Enable CORS middleware
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS not allowed"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
 app.use(express.json());
 // For parsing URL-encoded form data
 app.use(express.urlencoded({ extended: true }));
