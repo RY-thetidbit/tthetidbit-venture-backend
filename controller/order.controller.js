@@ -104,7 +104,7 @@ exports.paymentIntentPhonePay = async (req, res, next) => {
   let reqBody = req.body;
   reqBody.paymentIntent = {merchantTransactionId: transactionid}
   const orderTempItems = await OrderTemp.create(req.body);
-  // Payload definition
+  // Payload definition test
 const payload = {
 merchantId: process.env.NEXT_PUBLIC_MERCHANT_ID,
   merchantTransactionId: transactionid,
