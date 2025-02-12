@@ -104,13 +104,13 @@ exports.paymentIntentPhonePay = async (req, res, next) => {
   let reqBody = req.body;
   reqBody.paymentIntent = {merchantTransactionId: transactionid}
   const orderTempItems = await OrderTemp.create(req.body);
-  // Payload definition test
+  // Payload definition
 const payload = {
 merchantId: process.env.NEXT_PUBLIC_MERCHANT_ID,
   merchantTransactionId: transactionid,
   merchantUserId: "MUID123",
   amount: totalAmount,
-  redirectUrl: `${process.env.NEXT_PUBLIC_REDIRECTURL}${transactionid}`,
+  redirectUrl: `${process.env.STORE_URL}/order/success`,
   redirectMode: "POST",
   callbackUrl: `${process.env.NEXT_PUBLIC_REDIRECTURL}${transactionid}`,
   mobileNumber: contact,
@@ -194,30 +194,22 @@ const response = await axios.request(options);
 console.log("Response code:", response.data.code);
 
 if (response.data.code === "PAYMENT_SUCCESS") {
-  // Retrieve the order from OrderTemp based on the transaction ID and populate the user field
-  const orderItemTemp = await OrderTemp.findOne({ paymentIntent: { merchantTransactionId: transactionId } }).populate('user');
+  const orderItemTemp = await OrderTemp.findOne({ "paymentIntent.merchantTransactionId": transactionId }).populate('user');
 
-  // If orderItemTemp is found, proceed
   if (orderItemTemp) {
-      
-      // Destructure all properties of orderItemTemp excluding _id
-      let { _id, ...orderData } = orderItemTemp._doc; // `_doc` is used to access the raw document data
-      orderData.paymentStatus =  "success";
-      // Create a new Order with the retrieved data from OrderTemp (excluding _id)
-      const newOrder = await Order.create(orderData);
-      
-      // Redirect to the order page with the new order's ID
-      return res.redirect(301, `${process.env.STORE_URL}/order/${newOrder._id}`);
+    let { _id, ...orderData } = orderItemTemp._doc;
+    orderData.paymentStatus = "success";
+
+    const newOrder = await Order.create(orderData);
+
+    // Use JavaScript-based redirection instead of server-side 301
+    return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/${newOrder._id}";</script>`);
   } else {
-     
-    console.log("temp order not found for transactionId:",  transactionId)
-      
-      // Redirect to the order page with the new order's ID
-      return res.redirect(301, `${process.env.STORE_URL}/order/12345`);
+    console.log("Temp order not found for transactionId:", transactionId);
+    return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/failed";</script>`);
   }
- } else {
-  orderData.paymentStatus =  "failed";
-  return res.redirect(301, `${process.env.STORE_URL}/order/12345`);
+} else {
+  return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/failed";</script>`);
 }
 }catch(e){
   return res.redirect(301, `${process.env.STORE_URL}/order/12345`);
