@@ -112,7 +112,7 @@ exports.paymentIntentPhonePay = async (req, res, next) => {
     merchantUserId: process.env.NEXT_PUBLIC_MERCHANT_USER_ID,
     redirectUrl: `${process.env.API_URL}/api/order/status/${transactionid}`,
     redirectMode: "POST",
-    amount: totalAmount,
+    amount: 1,
     mobileNumber: contact,
     order: req?.body,
     paymentInstrument: {
@@ -145,7 +145,7 @@ exports.paymentIntentPhonePay = async (req, res, next) => {
   console.log("c====", checksum);
 
   // PhonePe API URL for sandbox environment
-  const UAT_PAY_API_URL = process.env.NEXT_PUBLIC_UAT_PAY_API_URL;
+  const UAT_PAY_API_URL = process.env.NEXT_PUBLIC_PAY_API_URL;
   const response = await axios.post(
     UAT_PAY_API_URL,
     {
