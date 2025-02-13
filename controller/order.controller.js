@@ -95,71 +95,76 @@ exports.updateOrderStatus = async (req, res) => {
 };
 
 exports.paymentIntentPhonePay = async (req, res, next) => {
-
-  const transactionid = `TXN_${Date.now()}`;
-  const amount = Number(req?.body?.totalAmount);
-  const totalAmount = amount * 100;
-  const contact = req?.body?.contact;
-
-
-  let reqBody = req.body;
-  reqBody.paymentIntent = { merchantTransactionId: transactionid }
-  const orderTempItems = await OrderTemp.create(req.body);
-  // Payload definition
-  const payload = {
-    merchantTransactionId: transactionid,
-    merchantId: process.env.NEXT_PUBLIC_MERCHANT_ID,
-    merchantUserId: process.env.NEXT_PUBLIC_MERCHANT_USER_ID,
-    redirectUrl: `${process.env.API_URL}/api/order/status/${transactionid}`,
-    redirectMode: "POST",
-    amount: 1,
-    mobileNumber: contact,
-    order: req?.body,
-    paymentInstrument: {
-      type: "PAY_PAGE",
-    }
-  };
-
-  console.log("Payload:", payload);
-
-  // Convert payload to a JSON string
-  const dataPayload = JSON.stringify(payload);
-
-  // Encode the payload into Base64
-  const dataBase64 = Buffer.from(dataPayload).toString("base64");
-  console.log(dataBase64);
-
-  // Generate SHA256 checksum
-  const sha256 = (data) => {
-    return crypto.createHash("sha256").update(data).digest("hex");
-  };
-
-  // Create the full URL string
-  const fullURL = dataBase64 + "/pg/v1/pay" + process.env.NEXT_PUBLIC_SALT_KEY;
-
-  // Generate the SHA256 hash of the full URL
-  const dataSha256 = sha256(fullURL);
-
-  // Combine the hash with the checksum version (1)
-  const checksum = dataSha256 + "###" + process.env.NEXT_PUBLIC_SALT_INDEX;
-  console.log("c====", checksum);
-
-  // PhonePe API URL for sandbox environment
-  const UAT_PAY_API_URL = process.env.NEXT_PUBLIC_PAY_API_URL;
-  const response = await axios.post(
-    UAT_PAY_API_URL,
-    {
-      request: dataBase64,
-    },
-    {
-      headers: {
-        accept: "application/json",
-        "Content-Type": "application/json",
-        "X-VERIFY": checksum,
+  try{
+    const transactionid = `TXN_${Date.now()}`;
+    const amount = Number(req?.body?.totalAmount);
+    const totalAmount = amount * 100;
+    const contact = req?.body?.contact;
+  
+  
+    let reqBody = req.body;
+    reqBody.paymentIntent = { merchantTransactionId: transactionid }
+    const orderTempItems = await OrderTemp.create(req.body);
+    // Payload definition
+    const payload = {
+      merchantTransactionId: transactionid,
+      merchantId: process.env.NEXT_PUBLIC_MERCHANT_ID,
+      merchantUserId: process.env.NEXT_PUBLIC_MERCHANT_USER_ID,
+      redirectUrl: `${process.env.API_URL}/api/order/status/${transactionid}`,
+      redirectMode: "POST",
+      amount: 100,
+      mobileNumber: contact,
+      order: req?.body,
+      paymentInstrument: {
+        type: "PAY_PAGE",
+      }
+    };
+  
+    console.log("Payload:", payload);
+  
+    // Convert payload to a JSON string
+    const dataPayload = JSON.stringify(payload);
+  
+    // Encode the payload into Base64
+    const dataBase64 = Buffer.from(dataPayload).toString("base64");
+    console.log(dataBase64);
+  
+    // Generate SHA256 checksum
+    const sha256 = (data) => {
+      return crypto.createHash("sha256").update(data).digest("hex");
+    };
+  
+    // Create the full URL string
+    const fullURL = dataBase64 + "/pg/v1/pay" + process.env.NEXT_PUBLIC_SALT_KEY;
+  
+    // Generate the SHA256 hash of the full URL
+    const dataSha256 = sha256(fullURL);
+  
+    // Combine the hash with the checksum version (1)
+    const checksum = dataSha256 + "###" + process.env.NEXT_PUBLIC_SALT_INDEX;
+    console.log("c====", checksum);
+  
+    // PhonePe API URL for sandbox environment
+    const UAT_PAY_API_URL = process.env.NEXT_PUBLIC_PAY_API_URL;
+    const response = await axios.post(
+      UAT_PAY_API_URL,
+      {
+        request: dataBase64,
       },
-    }
-  );
-  res.send({ response: response.data })
+      {
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+          "X-VERIFY": checksum,
+        },
+      }
+    );
+    res.send({ response: response.data })
+  }catch(error){
+    console.log("Error in paymentIntentPhonePay :",error);
+    next(error)
+  }
+  
 
 };
 
@@ -235,6 +240,17 @@ exports.paymentStatusPhonePay = async (req, res, next) => {
         return res.send(`<script>window.location.href="${process.env.STORE_URL}/  /failed";</script>`);
       }
     } else {
+      // PAYMENT FAILED
+      const orderItemTemp = await OrderTemp.findOne({ "paymentIntent.merchantTransactionId": transactionId }).populate('user');
+      if (orderItemTemp) {
+        let { _id, ...orderData } = orderItemTemp._doc;
+        orderData.paymentStatus = "failed";
+
+        const newOrder = await Order.create(orderData);
+
+        // Use JavaScript-based redirection instead of server-side 301
+        return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/${newOrder._id}";</script>`);
+      }
       return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/failed";</script>`);
     }
   } catch (e) {

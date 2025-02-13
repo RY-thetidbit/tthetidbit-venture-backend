@@ -25,7 +25,8 @@ const cloudinaryRoutes = require("./routes/cloudinary.routes");
 // middleware
 // // Define allowed frontend domains
 // const allowedOrigins = [
-  // "https://api.phonepe.com/apis/hermes"
+  // "https://api.phonepe.com/"
+  // "https://api.phonepe.com"
 //   "https://www.thetidbit.in",
 //   "https://thetidbit.in",
 //   "https://thetidbit-venture-frontend.vercel.app",
