@@ -3,10 +3,12 @@ const stripe = require("stripe")(secret.stripe_key);
 const Order = require("../model/Order");
 const OrderTemp = require("../model/OrderTemp");
 const Payment = require("../model/Payment");
+const Token = require("../model/Token");
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 const crypto = require("crypto");
 require("dotenv").config(); // To load environment variables
+const qs = require("qs");
 
 // create-payment-intent
 exports.paymentIntent = async (req, res, next) => {
@@ -94,7 +96,9 @@ exports.updateOrderStatus = async (req, res) => {
   }
 };
 
-exports.paymentIntentPhonePay = async (req, res, next) => {
+// ===========START -- PHONE PAY USING V1- OLD ONE NOT WORK WITH CURRENT CREDENTIALS=============================================
+
+exports.paymentIntentPhonePay1 = async (req, res, next) => {
   try{
     const transactionid = `TXN_${Date.now()}`;
     const amount = Number(req?.body?.totalAmount);
@@ -184,7 +188,7 @@ const saveTransaction = async ({
   });
 };
 
-exports.paymentStatusPhonePay = async (req, res, next) => {
+exports.paymentStatusPhonePay1 = async (req, res, next) => {
   try {
     // Directly access data from req.body
     const status = req.body.code;
@@ -258,5 +262,172 @@ exports.paymentStatusPhonePay = async (req, res, next) => {
     return res.redirect(301, `${process.env.STORE_URL}/order/12345`);
   }
 
+};
+
+// ===========END -- PHONE PAY USING V1- OLD ONE NOT WORK WITH CURRENT CREDENTIALS=============================================
+
+
+// ===========START -- PHONE PAY USING V2- NEW=============================================
+
+const getAccessToken = async () => {
+  const data = qs.stringify({
+    client_id: process.env.NEXT_PUBLIC_CLIENT_ID,
+    client_version: process.env.NEXT_PUBLIC_CLIENT_VERSION, // For UAT, use "1". For PROD, use the version provided in your credentials email.
+    client_secret: process.env.NEXT_PUBLIC_CLIENT_SECRATE,
+    grant_type: 'client_credentials'
+  });
+
+  try {
+    const response = await axios.post(
+      `${process.env.NEXT_PUBLIC_API_URL}/v1/oauth/token`,
+      data,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+    console.log('Access Token:', response.data.access_token);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching access token:', error);
+    throw error;
+  }
+};
+
+
+exports.paymentIntentPhonePay = async (req, res, next) => {
+
+  // CREATE TEMP ORDER
+  const transactionid = `TXN_${Date.now()}`;
+  const amount = Number(req?.body?.totalAmount);
+  const totalAmount = amount * 100;
+  const contact = req?.body?.contact;
+
+  let reqBody = req.body;
+  reqBody.paymentIntent = { merchantTransactionId: transactionid }
+  await OrderTemp.create(req.body);
+  
+  // GET THE ACCESS TOKEN
+  const tokenData = await getAccessToken();
+
+  // Upsert token into MongoDB. We assume there's only one token document.
+  await Token.findOneAndUpdate({}, tokenData, { upsert: true, new: true });
+  console.log('Token stored in Mongo:', tokenData.access_token);
+  const accessToken = tokenData.access_token;
+
+  try {
+    const payload = {
+      "merchantOrderId": transactionid,
+      "amount": totalAmount,
+      "expireAfter": 1200,
+      "metaInfo": req.body,
+      "paymentFlow": {
+          "type": "PG_CHECKOUT",
+          "message": "Payment message used for collect requests",
+          "merchantUrls": {
+              "redirectUrl": `${process.env.API_URL}/api/order/status/${transactionid}`,
+          }
+      } 
+  }
+
+  console.log("Payload:", payload);
+    const response = await axios.post(
+      `${process.env.NEXT_PUBLIC_API_URL}/checkout/v2/pay`,
+      payload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `O-Bearer ${accessToken}` // Replace with your valid access token
+        }
+      }
+    );
+
+    console.log("Initiate Payment Response:", response.data);
+     res.send({ response: response.data });
+  } catch (error) {
+    console.error("Error initiating payment:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+const _getStoredAccessToken = async () => {
+  const tokenDoc = await Token.findOne({});
+  if (!tokenDoc) {
+    throw new Error('Access token not available');
+  }
+  return tokenDoc.access_token;
+};
+
+const _checkOrderStatusApi = async (merchantOrderId) => {
+  const accessToken = await _getStoredAccessToken();
+  console.log("access token instatus api:",accessToken)
+  console.log('Access Token:', accessToken);
+  try {
+    const config = {
+      method: 'get',
+      maxBodyLength: Infinity,
+      url: `${process.env.NEXT_PUBLIC_API_URL}/checkout/v2/transaction/${merchantOrderId}/status`,
+      headers: { 
+        'Authorization': `O-Bearer ${accessToken}`
+      }
+    };
+
+    console.log("Config:", config)
+    
+    const response = await  axios.request(config)
+    console.log('Order Status:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching order status:', error.response ? error.response.data : error.message);
+    throw error;
+  }
+};
+
+exports.paymentStatusPhonePay = async (req, res, next) => {
+
+  try{
+    console.log("paymentStatusPhonePay:",req.params.id,req.body)
+
+    const merchantOrderId = req.params.id;
+    const orderStatusData = await _checkOrderStatusApi(merchantOrderId);
+    console.log('Order Status Data:', orderStatusData);
+  
+    if (orderStatusData.state === "COMPLETED") {
+      const orderItemTemp = await OrderTemp.findOne({ "paymentIntent.merchantTransactionId": merchantOrderId }).populate('user');
+  
+      if (orderItemTemp) {
+        let { _id, ...orderData } = orderItemTemp._doc;
+        orderData.paymentStatus = "success";
+  
+        const newOrder = await Order.create(orderData);
+  
+        // Use JavaScript-based redirection instead of server-side 301
+        return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/${newOrder._id}";</script>`);
+      } else {
+        console.log("Temp order not found for transactionId:", transactionId);
+        return res.send(`<script>window.location.href="${process.env.STORE_URL}/  /failed";</script>`);
+      }
+    } else {
+      // PAYMENT FAILED
+      const orderItemTemp = await OrderTemp.findOne({ "paymentIntent.merchantTransactionId": transactionId }).populate('user');
+      if (orderItemTemp) {
+        let { _id, ...orderData } = orderItemTemp._doc;
+        orderData.paymentStatus = "failed";
+  
+        const newOrder = await Order.create(orderData);
+  
+        // Use JavaScript-based redirection instead of server-side 301
+        return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/${newOrder._id}";</script>`);
+      }
+      return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/failed";</script>`);
+    }
+  }catch(error){
+    console.log("Error in paymentStatusPhonePay :",error);
+    next(error)
+  }
+  
+
+  
 };
 

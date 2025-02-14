@@ -25,6 +25,6 @@ router.patch("/update-status/:id", updateOrderStatus);
 // add a create payment intent phonepay
 router.post("/create-payment-intent-phonePay", paymentIntentPhonePay);
 // add a create payment intent phonepay
-router.post("/status/:id", paymentStatusPhonePay);
+router.get("/status/:id", paymentStatusPhonePay);
 
 module.exports = router;
