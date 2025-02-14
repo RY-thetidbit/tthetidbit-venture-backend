@@ -277,6 +277,8 @@ const getAccessToken = async () => {
     grant_type: 'client_credentials'
   });
 
+  console.log('getAccessToken Data:', `${process.env.NEXT_PUBLIC_API_URL}/v1/oauth/token`, data);
+
   try {
     const response = await axios.post(
       `${process.env.NEXT_PUBLIC_API_URL}/v1/oauth/token`,
