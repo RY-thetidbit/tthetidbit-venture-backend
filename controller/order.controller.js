@@ -319,7 +319,7 @@ exports.paymentIntentPhonePay = async (req, res, next) => {
   try {
     const payload = {
       "merchantOrderId": transactionid,
-      "amount": totalAmount,
+      "amount": 1000,
       "expireAfter": 1200,
       "metaInfo": req.body,
       "paymentFlow": {
