@@ -321,7 +321,7 @@ exports.paymentIntentPhonePay = async (req, res, next) => {
   try {
     const payload = {
       "merchantOrderId": transactionid,
-      "amount": 1000,
+      "amount": totalAmount,
       "expireAfter": 1200,
       "metaInfo": req.body,
       "paymentFlow": {
@@ -426,7 +426,7 @@ exports.paymentStatusPhonePay = async (req, res, next) => {
     }
   }catch(error){
     console.log("Error in paymentStatusPhonePay :",error);
-    next(error)
+    return res.send(`<script>window.location.href="${process.env.STORE_URL}/order/failed";</script>`);
   }
   
 
