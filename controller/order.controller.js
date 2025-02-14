@@ -281,7 +281,7 @@ const getAccessToken = async () => {
 
   try {
     const response = await axios.post(
-      `${process.env.NEXT_PUBLIC_API_URL}/v1/oauth/token`,
+      `${process.env.NEXT_PUBLIC_TOKEN_URL}`,
       data,
       {
         headers: {
