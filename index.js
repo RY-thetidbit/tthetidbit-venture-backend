@@ -52,7 +52,7 @@ const cloudinaryRoutes = require("./routes/cloudinary.routes");
 
 app.use(cors({
   origin: "*", // Allows all origins
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "DELETE","PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 

@@ -369,7 +369,7 @@ const _checkOrderStatusApi = async (merchantOrderId) => {
     const config = {
       method: 'get',
       maxBodyLength: Infinity,
-      url: `${process.env.NEXT_PUBLIC_API_URL}/checkout/v2/transaction/${merchantOrderId}/status`,
+      url: `${process.env.NEXT_PUBLIC_API_URL}/checkout/v2/order/${merchantOrderId}/status`,
       headers: { 
         'Authorization': `O-Bearer ${accessToken}`
       }
